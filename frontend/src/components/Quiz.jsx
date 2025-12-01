@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiCall, showToast } from '../utils/api';
-import './quiz.css';
+import './Quiz.css';
 
 const Quiz = ({ user, onLogout }) => {
   const [quizzes, setQuizzes] = useState([]);
