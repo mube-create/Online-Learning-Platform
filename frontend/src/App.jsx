@@ -1,312 +1,305 @@
 import React, { useState, useEffect } from 'react';
-import './styles.css';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import Auth from './pages/Auth';
+import AdminDashboard from './components/AdminDashboard';
+import Courses from './components/Courses';
+import CourseCreation from './components/CourseCreation';
+import Quiz from './components/Quiz';
 
-// Courses Component with API integration
-const Courses = ({ user }) => {
-  const [courses, setCourses] = useState([]);
-  const [enrolledCourses, setEnrolledCourses] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [enrolling, setEnrolling] = useState(null);
-
-  useEffect(() => {
-    fetchCourses();
-    if (user) {
-      fetchMyCourses();
-    }
-  }, [user]);
-
-  const fetchCourses = async () => {
-    try {
-      const response = await fetch('http://localhost:3000/courses');
-      const result = await response.json();
-      if (result.success) {
-        setCourses(result.courses);
-      }
-    } catch (error) {
-      console.error('Error fetching courses:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchMyCourses = async () => {
-    try {
-      const response = await fetch(`http://localhost:3000/my-courses/${user.id}`);
-      const result = await response.json();
-      if (result.success) {
-        setEnrolledCourses(result.enrollments);
-      }
-    } catch (error) {
-      console.error('Error fetching enrolled courses:', error);
-    }
-  };
-
-  const enrollInCourse = async (courseId) => {
-    setEnrolling(courseId);
-    try {
-      const response = await fetch('http://localhost:3000/enroll', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.id,
-          courseId: courseId
-        })
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        alert('Enrolled successfully!');
-        fetchMyCourses();
-      } else {
-        alert(result.message);
-      }
-    } catch (error) {
-      alert('Error enrolling in course');
-    } finally {
-      setEnrolling(null);
-    }
-  };
-
-  const isEnrolled = (courseId) => {
-    return enrolledCourses.some(enrollment => enrollment.course._id === courseId);
-  };
-
-  if (loading) {
-    return <div className="loading">Loading courses...</div>;
-  }
-
-  return (
-    <div className="courses-page">
-      <div className="courses-header">
-        <h1>Available Courses</h1>
-        <p>Expand your knowledge with our curated courses</p>
-      </div>
-
-      <div className="courses-grid">
-        {courses.map(course => (
-          <div key={course._id} className="course-card">
-            <div className="course-image">
-              <img src={course.image} alt={course.title} />
-            </div>
-            <div className="course-content">
-              <h3>{course.title}</h3>
-              <p className="course-description">{course.description}</p>
-              
-              <div className="course-meta">
-                <span className="instructor">👨‍🏫 {course.instructor}</span>
-                <span className="duration">⏱️ {course.duration}</span>
-                <span className="level">📊 {course.level}</span>
-              </div>
-              
-              <div className="course-footer">
-                <div className="price">${course.price}</div>
-                {user ? (
-                  isEnrolled(course._id) ? (
-                    <button className="enrolled-btn" disabled>
-                      ✅ Enrolled
-                    </button>
-                  ) : (
-                    <button 
-                      className="enroll-btn"
-                      onClick={() => enrollInCourse(course._id)}
-                      disabled={enrolling === course._id}
-                    >
-                      {enrolling === course._id ? 'Enrolling...' : 'Enroll Now'}
-                    </button>
-                  )
-                ) : (
-                  <button className="login-to-enroll" disabled>
-                    Login to Enroll
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {courses.length === 0 && (
-        <div className="no-courses">
-          <p>No courses available at the moment.</p>
-          <button 
-            onClick={() => window.open('http://localhost:3000/create-sample-courses', '_blank')}
-            className="create-sample-btn"
-          >
-            Create Sample Courses
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Register Component
-const Register = ({ onSwitchToLogin, onRegister }) => {
-  return (
-    <div style={{ 
-      minHeight: '100vh', 
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '20px'
-    }}>
-      <div style={{
-        background: 'white',
-        padding: '40px',
-        borderRadius: '15px',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
-        width: '100%',
-        maxWidth: '450px'
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <h1 style={{ color: '#333', fontSize: '28px', marginBottom: '5px' }}>
-            Create Account
-          </h1>
-          <p style={{ color: '#666', fontSize: '14px' }}>
-            Join our learning community
-          </p>
-        </div>
-        
-        <div style={{ textAlign: 'center', padding: '20px' }}>
-          <p>Registration feature coming soon!</p>
-          <button 
-            onClick={onSwitchToLogin}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#667eea',
-              cursor: 'pointer',
-              fontWeight: '600',
-              textDecoration: 'underline',
-              marginTop: '10px'
-            }}
-          >
-            Back to Login
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Main App Component
 function App() {
-  const [user, setUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState('admin@example.com');
-  const [password, setPassword] = useState('admin123');
-  const [error, setError] = useState('');
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [showRegister, setShowRegister] = useState(false);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
+    const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        setCurrentUser(JSON.parse(savedUser));
+      } catch (error) {
+        console.error('Error parsing saved user:', error);
+        localStorage.removeItem('currentUser');
+      }
     }
     setLoading(false);
   }, []);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoginLoading(true);
-    setError('');
-
-    try {
-      const response = await fetch('http://localhost:3000/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password })
-      });
-
-      const result = await response.json();
-      
-      if (result.success) {
-        localStorage.setItem('user', JSON.stringify(result.user));
-        setUser(result.user);
-      } else {
-        setError(result.message || 'Login failed');
-      }
-    } catch (error) {
-      setError('Network error. Please check if backend is running.');
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  const handleRegister = (userData) => {
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
-    setShowRegister(false);
-  };
-
-  const handleSwitchToLogin = () => {
-    setShowRegister(false);
-    setError('');
-  };
-
-  const handleSwitchToRegister = () => {
-    setShowRegister(true);
-    setError('');
+  const handleLogin = (user) => {
+    setCurrentUser(user);
+    localStorage.setItem('currentUser', JSON.stringify(user));
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
-    setUser(null);
-    setActiveTab('dashboard');
+    setCurrentUser(null);
+    localStorage.removeItem('currentUser');
+  };
+
+  const ProtectedRoute = ({ children, allowedRoles = [] }) => {
+    if (!currentUser) {
+      return <Navigate to="/login" replace />;
+    }
+    
+    if (allowedRoles.length > 0 && !allowedRoles.includes(currentUser.role)) {
+      return <Navigate to="/dashboard" replace />;
+    }
+    
+    return children;
+  };
+
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'linear-gradient(135deg, #1e3c72, #2a5298)',
+        color: 'white',
+        fontSize: '18px'
+      }}>
+        Loading...
+      </div>
+    );
+  }
+
+  return (
+    <Router>
+      <Routes>
+        <Route 
+          path="/login" 
+          element={
+            currentUser ? (
+              <Navigate to={currentUser.role === 'admin' ? '/admin' : '/dashboard'} replace />
+            ) : (
+              <Auth onLogin={handleLogin} />
+            )
+          } 
+        />
+
+        <Route 
+          path="/admin/*" 
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminDashboard user={currentUser} onLogout={handleLogout} />
+            </ProtectedRoute>
+          } 
+        />
+
+        <Route 
+          path="/dashboard/*" 
+          element={
+            <ProtectedRoute>
+              <MainDashboard user={currentUser} onLogout={handleLogout} />
+            </ProtectedRoute>
+          } 
+        />
+
+        <Route 
+          path="/courses" 
+          element={
+            <ProtectedRoute>
+              <Courses user={currentUser} onLogout={handleLogout} />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/create-course" 
+          element={
+            <ProtectedRoute allowedRoles={['instructor', 'admin']}>
+              <CourseCreation user={currentUser} onLogout={handleLogout} />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/quiz" 
+          element={
+            <ProtectedRoute>
+              <Quiz user={currentUser} onLogout={handleLogout} />
+            </ProtectedRoute>
+          } 
+        />
+
+        <Route 
+          path="/" 
+          element={
+            <Navigate to={
+              currentUser 
+                ? (currentUser.role === 'admin' ? '/admin' : '/dashboard')
+                : '/login'
+            } replace />
+          } 
+        />
+        
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
+  );
+}
+
+// MainDashboard with consistent button sizes
+const MainDashboard = ({ user, onLogout }) => {
+  const navigate = useNavigate();
+  const [activeSection, setActiveSection] = useState('dashboard');
+
+  const handleNavigation = (section) => {
+    setActiveSection(section);
+    if (section === 'dashboard') {
+      navigate('/dashboard');
+    } else {
+      navigate(`/${section}`);
+    }
+  };
+
+  // Consistent button styles
+  const navButtonStyle = (isActive = false) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px 20px',
+    color: 'white',
+    background: isActive ? 'rgba(255,255,255,0.2)' : 'none',
+    border: 'none',
+    width: '100%',
+    textAlign: 'left',
+    cursor: 'pointer',
+    fontSize: '14px',
+    borderRight: isActive ? '3px solid #fff' : 'none',
+    transition: 'all 0.3s ease',
+    fontFamily: 'inherit'
+  });
+
+  const logoutButtonStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px 20px',
+    color: '#ff6b6b',
+    background: 'none',
+    border: 'none',
+    width: '100%',
+    textAlign: 'left',
+    cursor: 'pointer',
+    fontSize: '14px',
+    transition: 'all 0.3s ease',
+    fontFamily: 'inherit'
+  };
+
+  const hoverStyle = {
+    background: 'rgba(255, 255, 255, 0.1)'
+  };
+
+  const logoutHoverStyle = {
+    background: 'rgba(255, 107, 107, 0.1)'
+  };
+
+  const styles = {
+    container: { display: 'flex', minHeight: '100vh', fontFamily: 'Arial, sans-serif' },
+    sidebar: { width: '250px', background: 'linear-gradient(135deg, #1e3c72, #2a5298)', color: 'white', padding: '20px 0' },
+    logo: { display: 'flex', alignItems: 'center', gap: '10px', padding: '0 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)' },
+    navLinks: { listStyle: 'none', marginTop: '20px', padding: '0' },
+    navLink: { marginBottom: '0' },
+    mainContent: { flex: 1, padding: '20px', background: '#f5f5f5' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', background: 'white', padding: '20px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' },
+    dashboardCards: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' },
+    card: { background: 'white', padding: '25px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' },
+    cardHeader: { display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' },
+    cardIcon: { width: '50px', height: '50px', background: 'linear-gradient(135deg, #1e3c72, #2a5298)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '20px' },
+    btn: { background: 'linear-gradient(135deg, #1e3c72, #2a5298)', color: 'white', border: 'none', padding: '12px 24px', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', textDecoration: 'none', display: 'inline-block' },
+    userInfo: { display: 'flex', alignItems: 'center', gap: '15px' },
+    profileInfo: { marginTop: '15px' },
+    logoutSection: { marginTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '20px' }
   };
 
   const renderContent = () => {
-    switch (activeTab) {
+    switch (activeSection) {
       case 'courses':
-        return <Courses user={user} />;
-      case 'dashboard':
+        return <Courses user={user} onLogout={onLogout} />;
+      case 'create-course':
+        return <CourseCreation user={user} onLogout={onLogout} />;
+      case 'quiz':
+        return <Quiz user={user} onLogout={handleLogout} />;
       default:
         return (
-          <div className="dashboard-content">
-            <div className="welcome-card">
-              <h2>🎉 Welcome to Your Dashboard!</h2>
-              <div className="user-details">
-                <p><strong>Name:</strong> {user.name}</p>
-                <p><strong>Email:</strong> {user.email}</p>
-                <p><strong>Role:</strong> <span className="role-badge">{user.role}</span></p>
+          <div style={styles.mainContent}>
+            <div style={styles.header}>
+              <div className="welcome">
+                <h2>Welcome back, {user.name}!</h2>
+                <p>Here's what's happening with your courses today.</p>
+              </div>
+              <div style={styles.userInfo}>
+                <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=2a5298&color=fff`} alt={user.name} width="50" height="50" style={{borderRadius: '50%', border: '3px solid #2a5298'}} />
+                <div className="user-details">
+                  <h4>{user.name}</h4>
+                  <p>{user.role}</p>
+                </div>
               </div>
             </div>
 
-            <div className="features-grid">
-              <div className="feature-card">
-                <h3>📚 Available Courses</h3>
-                <p>Browse and enroll in courses</p>
+            <div style={styles.dashboardCards}>
+              <div style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <div style={styles.cardIcon}>
+                    <i className="fas fa-book"></i>
+                  </div>
+                  <h3>Available Courses</h3>
+                </div>
+                <p>Browse and enroll in our wide range of courses.</p>
                 <button 
-                  className="feature-btn"
-                  onClick={() => setActiveTab('courses')}
+                  style={styles.btn} 
+                  onClick={() => handleNavigation('courses')}
                 >
                   View Courses
                 </button>
               </div>
-              
-              <div className="feature-card">
-                <h3>🎓 My Learning</h3>
-                <p>Track your progress</p>
-                <button className="feature-btn">My Progress</button>
+
+              <div style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <div style={styles.cardIcon}>
+                    <i className="fas fa-question-circle"></i>
+                  </div>
+                  <h3>Take Quizzes</h3>
+                </div>
+                <p>Test your knowledge with our interactive quizzes.</p>
+                <button 
+                  style={styles.btn} 
+                  onClick={() => handleNavigation('quiz')}
+                >
+                  Start Quiz
+                </button>
               </div>
-              
-              <div className="feature-card">
-                <h3>👨‍🏫 Instructors</h3>
-                <p>Learn from experts</p>
-                <button className="feature-btn">Meet Instructors</button>
-              </div>
-              
-              <div className="feature-card">
-                <h3>📊 Analytics</h3>
-                <p>View your performance</p>
-                <button className="feature-btn">See Analytics</button>
+
+              {user.role === 'instructor' && (
+                <div style={styles.card}>
+                  <div style={styles.cardHeader}>
+                    <div style={styles.cardIcon}>
+                      <i className="fas fa-plus-circle"></i>
+                    </div>
+                    <h3>Create Course</h3>
+                  </div>
+                  <p>Share your knowledge by creating a new course.</p>
+                  <button 
+                    style={styles.btn} 
+                    onClick={() => handleNavigation('create-course')}
+                  >
+                    Create Course
+                  </button>
+                </div>
+              )}
+
+              <div style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <div style={styles.cardIcon}>
+                    <i className="fas fa-user"></i>
+                  </div>
+                  <h3>Your Profile</h3>
+                </div>
+                <p>View and manage your account information.</p>
+                <div style={styles.profileInfo}>
+                  <p><strong>Name:</strong> {user.name}</p>
+                  <p><strong>Email:</strong> {user.email}</p>
+                  <p><strong>Role:</strong> {user.role}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -314,112 +307,108 @@ function App() {
     }
   };
 
-  if (loading) {
-    return <div className="loading">Loading...</div>;
-  }
-
-  if (!user && showRegister) {
-    return <Register onSwitchToLogin={handleSwitchToLogin} onRegister={handleRegister} />;
-  }
-
-  if (!user && !showRegister) {
-    return (
-      <div className="login-container">
-        <div className="login-card">
-          <div className="logo">
-            <h1>Online Learning Platform</h1>
-            <p>Welcome back! Please login to your account.</p>
-          </div>
-          
-          <form onSubmit={handleLogin} className="login-form">
-            <div className="form-group">
-              <label htmlFor="email">Email Address</label>
-              <input
-                type="email"
-                id="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="Enter your email"
-              />
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="password">Password</label>
-              <input
-                type="password"
-                id="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Enter your password"
-              />
-            </div>
-            
-            <button 
-              type="submit" 
-              className="login-btn"
-              disabled={loginLoading}
-            >
-              {loginLoading ? 'Logging in...' : 'Login to Account'}
-            </button>
-          </form>
-          
-          {error && (
-            <div className="error-message">
-              ❌ {error}
-            </div>
-          )}
-          
-          <div className="auth-switch">
-            <p>Don't have an account? 
-              <button onClick={handleSwitchToRegister} className="switch-btn">
-                Sign up here
-              </button>
-            </p>
-          </div>
-          
-          <div className="demo-credentials">
-            <h3>Demo Credentials:</h3>
-            <p>📧 Email: admin@example.com</p>
-            <p>🔑 Password: admin123</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="dashboard">
-      <header className="dashboard-header">
-        <div className="header-content">
-          <h1>Online Learning Platform</h1>
-          <div className="user-info">
-            <span>Welcome, {user.name}</span>
-            <div className="nav-tabs">
-              <button 
-                className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
-                onClick={() => setActiveTab('dashboard')}
-              >
-                Dashboard
-              </button>
-              <button 
-                className={`nav-tab ${activeTab === 'courses' ? 'active' : ''}`}
-                onClick={() => setActiveTab('courses')}
-              >
-                Courses
-              </button>
-            </div>
-            <button onClick={handleLogout} className="logout-btn">
-              Logout
-            </button>
-          </div>
+    <div style={styles.container}>
+      <div style={styles.sidebar}>
+        <div style={styles.logo}>
+          <i className="fas fa-graduation-cap"></i>
+          <h1>LearnPro</h1>
         </div>
-      </header>
+        <ul style={styles.navLinks}>
+          <li style={styles.navLink}>
+            <button 
+              onClick={() => handleNavigation('dashboard')}
+              style={navButtonStyle(activeSection === 'dashboard')}
+              onMouseEnter={(e) => {
+                if (activeSection !== 'dashboard') {
+                  e.target.style.background = hoverStyle.background;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (activeSection !== 'dashboard') {
+                  e.target.style.background = 'none';
+                }
+              }}
+            >
+              <i className="fas fa-th-large"></i> Dashboard
+            </button>
+          </li>
+          <li style={styles.navLink}>
+            <button 
+              onClick={() => handleNavigation('courses')}
+              style={navButtonStyle(activeSection === 'courses')}
+              onMouseEnter={(e) => {
+                if (activeSection !== 'courses') {
+                  e.target.style.background = hoverStyle.background;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (activeSection !== 'courses') {
+                  e.target.style.background = 'none';
+                }
+              }}
+            >
+              <i className="fas fa-book-open"></i> Courses
+            </button>
+          </li>
+          {user.role === 'instructor' && (
+            <li style={styles.navLink}>
+              <button 
+                onClick={() => handleNavigation('create-course')}
+                style={navButtonStyle(activeSection === 'create-course')}
+                onMouseEnter={(e) => {
+                  if (activeSection !== 'create-course') {
+                    e.target.style.background = hoverStyle.background;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeSection !== 'create-course') {
+                    e.target.style.background = 'none';
+                  }
+                }}
+              >
+                <i className="fas fa-plus-circle"></i> Create Course
+              </button>
+            </li>
+          )}
+          <li style={styles.navLink}>
+            <button 
+              onClick={() => handleNavigation('quiz')}
+              style={navButtonStyle(activeSection === 'quiz')}
+              onMouseEnter={(e) => {
+                if (activeSection !== 'quiz') {
+                  e.target.style.background = hoverStyle.background;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (activeSection !== 'quiz') {
+                  e.target.style.background = 'none';
+                }
+              }}
+            >
+              <i className="fas fa-question-circle"></i> Quiz
+            </button>
+          </li>
+          <li style={styles.logoutSection}>
+            <button 
+              onClick={onLogout} 
+              style={logoutButtonStyle}
+              onMouseEnter={(e) => {
+                e.target.style.background = logoutHoverStyle.background;
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'none';
+              }}
+            >
+              <i className="fas fa-sign-out-alt"></i> Logout
+            </button>
+          </li>
+        </ul>
+      </div>
 
       {renderContent()}
     </div>
   );
-}
+};
 
 export default App;

@@ -53,6 +53,46 @@ const enrollmentSchema = new mongoose.Schema({
 
 const Enrollment = mongoose.model('Enrollment', enrollmentSchema);
 
+// ========== QUIZ SCHEMAS ==========
+
+// Quiz Schema
+const quizSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String },
+  course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true },
+  questions: [{
+    questionText: { type: String, required: true },
+    options: [{ type: String, required: true }],
+    correctAnswer: { type: Number, required: true }, // index of correct option
+    points: { type: Number, default: 1 }
+  }],
+  totalPoints: { type: Number, default: 0 },
+  timeLimit: { type: Number, default: 30 }, // in minutes
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  isPublished: { type: Boolean, default: false }
+}, { timestamps: true });
+
+const Quiz = mongoose.model('Quiz', quizSchema);
+
+// Quiz Submission Schema
+const quizSubmissionSchema = new mongoose.Schema({
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  quiz: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true },
+  answers: [{
+    questionIndex: Number,
+    selectedOption: Number,
+    isCorrect: Boolean,
+    points: Number
+  }],
+  totalScore: { type: Number, default: 0 },
+  maxScore: { type: Number, default: 0 },
+  percentage: { type: Number, default: 0 },
+  timeSpent: { type: Number, default: 0 }, // in seconds
+  submittedAt: { type: Date, default: Date.now }
+});
+
+const QuizSubmission = mongoose.model('QuizSubmission', quizSubmissionSchema);
+
 // ========== USER ROUTES ==========
 
 // Update user role (admin only)
@@ -459,6 +499,219 @@ app.get('/my-courses/:userId', async (req, res) => {
   }
 });
 
+// ========== QUIZ ROUTES ==========
+
+// Create a new quiz
+app.post('/quizzes/create', async (req, res) => {
+  try {
+    const { title, description, course, questions, timeLimit, createdBy } = req.body;
+    
+    // Calculate total points
+    const totalPoints = questions.reduce((sum, question) => sum + (question.points || 1), 0);
+    
+    const quiz = new Quiz({
+      title,
+      description,
+      course,
+      questions,
+      totalPoints,
+      timeLimit: timeLimit || 30,
+      createdBy,
+      isPublished: true
+    });
+    
+    await quiz.save();
+    await quiz.populate('course', 'title');
+    
+    res.json({ 
+      success: true, 
+      message: 'Quiz created successfully!',
+      quiz 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get quizzes for a course
+app.get('/courses/:courseId/quizzes', async (req, res) => {
+  try {
+    const quizzes = await Quiz.find({ 
+      course: req.params.courseId, 
+      isPublished: true 
+    }).populate('course', 'title');
+    
+    res.json({ success: true, quizzes });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get single quiz
+app.get('/quizzes/:quizId', async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(req.params.quizId)
+      .populate('course', 'title')
+      .populate('createdBy', 'name');
+    
+    if (!quiz) {
+      return res.status(404).json({ success: false, message: 'Quiz not found' });
+    }
+    
+    res.json({ success: true, quiz });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Submit quiz answers
+app.post('/quizzes/:quizId/submit', async (req, res) => {
+  try {
+    const { userId, answers, timeSpent } = req.body;
+    const quiz = await Quiz.findById(req.params.quizId);
+    
+    if (!quiz) {
+      return res.status(404).json({ success: false, message: 'Quiz not found' });
+    }
+    
+    // Calculate score
+    let totalScore = 0;
+    const evaluatedAnswers = answers.map((answer, index) => {
+      const question = quiz.questions[answer.questionIndex];
+      const isCorrect = answer.selectedOption === question.correctAnswer;
+      const points = isCorrect ? (question.points || 1) : 0;
+      totalScore += points;
+      
+      return {
+        questionIndex: answer.questionIndex,
+        selectedOption: answer.selectedOption,
+        isCorrect,
+        points
+      };
+    });
+    
+    const percentage = (totalScore / quiz.totalPoints) * 100;
+    
+    const submission = new QuizSubmission({
+      user: userId,
+      quiz: req.params.quizId,
+      answers: evaluatedAnswers,
+      totalScore,
+      maxScore: quiz.totalPoints,
+      percentage,
+      timeSpent
+    });
+    
+    await submission.save();
+    
+    res.json({
+      success: true,
+      message: 'Quiz submitted successfully!',
+      submission: {
+        totalScore,
+        maxScore: quiz.totalPoints,
+        percentage: Math.round(percentage),
+        timeSpent
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get user's quiz submissions
+app.get('/users/:userId/quiz-submissions', async (req, res) => {
+  try {
+    const submissions = await QuizSubmission.find({ user: req.params.userId })
+      .populate('quiz', 'title course')
+      .populate('quiz.course', 'title');
+    
+    res.json({ success: true, submissions });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Create sample quiz
+app.get('/create-sample-quiz', async (req, res) => {
+  try {
+    // Get a course first
+    const course = await Course.findOne();
+    
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'No courses found. Create courses first.' });
+    }
+    
+    const sampleQuiz = {
+      title: "Web Development Fundamentals Quiz",
+      description: "Test your knowledge of basic web development concepts",
+      course: course._id,
+      questions: [
+        {
+          questionText: "What does HTML stand for?",
+          options: [
+            "Hyper Text Markup Language",
+            "High Tech Modern Language", 
+            "Hyper Transfer Markup Language",
+            "Home Tool Markup Language"
+          ],
+          correctAnswer: 0,
+          points: 1
+        },
+        {
+          questionText: "Which CSS property is used to change the text color?",
+          options: [
+            "text-color",
+            "font-color", 
+            "color",
+            "text-style"
+          ],
+          correctAnswer: 2,
+          points: 1
+        },
+        {
+          questionText: "Which of the following is a JavaScript framework?",
+          options: [
+            "Laravel",
+            "Django", 
+            "React",
+            "Flask"
+          ],
+          correctAnswer: 2,
+          points: 2
+        },
+        {
+          questionText: "What is the purpose of media queries in CSS?",
+          options: [
+            "To play audio files",
+            "To create responsive designs", 
+            "To optimize images",
+            "To add animations"
+          ],
+          correctAnswer: 1,
+          points: 2
+        }
+      ],
+      timeLimit: 10,
+      createdBy: course.createdBy
+    };
+    
+    // Calculate total points
+    sampleQuiz.totalPoints = sampleQuiz.questions.reduce((sum, q) => sum + q.points, 0);
+    
+    const quiz = new Quiz(sampleQuiz);
+    await quiz.save();
+    
+    res.json({ 
+      success: true, 
+      message: 'Sample quiz created successfully!',
+      quiz 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ========== ADMIN ROUTES ==========
 
 // Get all users (admin only)
@@ -528,6 +781,12 @@ app.get('/', (req, res) => {
         create: 'POST /courses/create',
         sample: 'GET /create-sample-courses'
       },
+      quizzes: {
+        create: 'POST /quizzes/create',
+        get: 'GET /courses/:courseId/quizzes',
+        submit: 'POST /quizzes/:quizId/submit',
+        sample: 'GET /create-sample-quiz'
+      },
       admin: {
         users: 'GET /admin/users',
         stats: 'GET /admin/stats'
@@ -536,9 +795,10 @@ app.get('/', (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
   console.log(`📝 Initialize admin: http://localhost:${PORT}/init`);
   console.log(`📚 Create sample courses: http://localhost:${PORT}/create-sample-courses`);
+  console.log(`🧠 Create sample quiz: http://localhost:${PORT}/create-sample-quiz`);
 });
